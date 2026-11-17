@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -8,51 +7,71 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const MODEL_PATH = './modelos/museo.glb';
 
-// Posición inicial de cámara
-const INITIAL_POSITION = {
+// Posición inicial del jugador
+const PLAYER_START = {
     x: 0,
-    y: 10,
-    z: 2.5
+    y: 0,
+    z: 1
 };
 
-// Rotación inicial de cámara
-const INITIAL_ROTATION = {
-    x: -80,
+// Límites de movimiento del jugador
+const PLAYER_LIMITS = {
+    minX: -7.5,
+    maxX: 7.5,
+
+    minZ: -6,
+    maxZ: 6
+};
+
+// Configuración definitiva de cámara
+const CAMERA_OFFSET = {
+    x: 0.1,
+    y: 1.4,
+    z: 6
+};
+
+const CAMERA_ROTATION = {
+    x: -10,
     y: 0,
     z: 0
 };
+
+const CAMERA_FOV = 50;
+
+// Velocidad del jugador
+const PLAYER_SPEED = 0.08;
 
 // ==========================================
 // VARIABLES
 // ==========================================
 
-let scene, camera, renderer;
+let scene;
+let camera;
+let renderer;
 let player;
 
-const cameraSettings = {
-    x: INITIAL_POSITION.x,
-    y: INITIAL_POSITION.y,
-    z: INITIAL_POSITION.z,
-
-    rx: INITIAL_ROTATION.x,
-    ry: INITIAL_ROTATION.y,
-    rz: INITIAL_ROTATION.z,
-
-    fov: 50
-};
+const keys = {};
 
 // ==========================================
 // ESCENA
 // ==========================================
 
 scene = new THREE.Scene();
+
 scene.background = new THREE.Color(0x222222);
+
+// ==========================================
+// RENDERIZADOR
+// ==========================================
 
 renderer = new THREE.WebGLRenderer({
     antialias: true
 });
 
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+);
 
 renderer.setPixelRatio(
     Math.min(window.devicePixelRatio, 2)
@@ -67,7 +86,7 @@ document.body.appendChild(renderer.domElement);
 // ==========================================
 
 camera = new THREE.PerspectiveCamera(
-    cameraSettings.fov,
+    CAMERA_FOV,
     window.innerWidth / window.innerHeight,
     0.1,
     2000
@@ -93,7 +112,7 @@ light.position.set(5, 10, 5);
 scene.add(light);
 
 // ==========================================
-// CREAR PERSONAJE PROVISIONAL
+// CREAR JUGADOR
 // ==========================================
 
 function createPlayer() {
@@ -102,7 +121,11 @@ function createPlayer() {
 
     player.name = 'player';
 
-    player.position.set(0, 0, 1);
+    player.position.set(
+        PLAYER_START.x,
+        PLAYER_START.y,
+        PLAYER_START.z
+    );
 
     const geometry = new THREE.PlaneGeometry(
         1,
@@ -135,547 +158,133 @@ function createPlayer() {
 
 function updateCamera() {
 
+    if (!player) return;
+
+    // La cámara sigue al jugador
     camera.position.set(
-        cameraSettings.x,
-        cameraSettings.y,
-        cameraSettings.z
+        player.position.x + CAMERA_OFFSET.x,
+        player.position.y + CAMERA_OFFSET.y,
+        player.position.z + CAMERA_OFFSET.z
     );
 
+    // Mantener rotación fija
     camera.rotation.order = 'XYZ';
 
     camera.rotation.set(
-        THREE.MathUtils.degToRad(cameraSettings.rx),
-        THREE.MathUtils.degToRad(cameraSettings.ry),
-        THREE.MathUtils.degToRad(cameraSettings.rz),
+        THREE.MathUtils.degToRad(CAMERA_ROTATION.x),
+        THREE.MathUtils.degToRad(CAMERA_ROTATION.y),
+        THREE.MathUtils.degToRad(CAMERA_ROTATION.z),
         'XYZ'
     );
 
-    camera.fov = cameraSettings.fov;
+    camera.fov = CAMERA_FOV;
 
     camera.updateProjectionMatrix();
 
 }
 
 // ==========================================
-// CONTROLES DE CALIBRACIÓN
+// MOVIMIENTO DEL JUGADOR
 // ==========================================
 
-const controls = [
+function updatePlayer() {
 
-    {
-        name: 'X',
-        key: 'x',
-        min: -100,
-        max: 100,
-        step: 0.1,
-        group: 'position'
-    },
+    if (!player) return;
 
-    {
-        name: 'Y',
-        key: 'y',
-        min: -100,
-        max: 100,
-        step: 0.1,
-        group: 'position'
-    },
+    let moveX = 0;
+    let moveZ = 0;
 
-    {
-        name: 'Z',
-        key: 'z',
-        min: -100,
-        max: 100,
-        step: 0.1,
-        group: 'position'
-    },
-
-    {
-        name: 'Rotación X',
-        key: 'rx',
-        min: -180,
-        max: 180,
-        step: 1,
-        group: 'rotation'
-    },
-
-    {
-        name: 'Rotación Y',
-        key: 'ry',
-        min: -180,
-        max: 180,
-        step: 1,
-        group: 'rotation'
-    },
-
-    {
-        name: 'Rotación Z',
-        key: 'rz',
-        min: -180,
-        max: 180,
-        step: 1,
-        group: 'rotation'
-    },
-
-    {
-        name: 'FOV',
-        key: 'fov',
-        min: 20,
-        max: 120,
-        step: 1,
-        group: 'fov'
+    // Movimiento horizontal
+    if (keys['w'] || keys['arrowup']) {
+        moveZ -= 1;
     }
 
-];
-
-// ==========================================
-// PANEL DE CALIBRACIÓN
-// ==========================================
-
-function createCalibrationPanel() {
-
-    const panel = document.createElement('div');
-
-    panel.id = 'camera-panel';
-
-    panel.innerHTML = `
-
-        <style>
-
-            #camera-panel {
-
-                position: fixed;
-                top: 15px;
-                right: 15px;
-                width: 290px;
-                max-height: 90vh;
-                overflow-y: auto;
-
-                background: rgba(15,15,20,.95);
-                color: white;
-
-                padding: 18px;
-                border-radius: 10px;
-
-                z-index: 1000;
-
-                font-family: Arial, sans-serif;
-                font-size: 12px;
-
-                box-shadow: 0 5px 25px #0008;
-
-            }
-
-            #camera-panel h3 {
-
-                margin: 0 0 15px;
-                font-size: 16px;
-                color: #e4bd78;
-
-            }
-
-            #camera-panel .group {
-
-                margin-bottom: 15px;
-
-                border-bottom: 1px solid #444;
-
-                padding-bottom: 10px;
-
-            }
-
-            #camera-panel .control {
-
-                display: flex;
-                align-items: center;
-                gap: 8px;
-
-                margin: 10px 0;
-
-            }
-
-            #camera-panel label {
-
-                width: 90px;
-
-            }
-
-            #camera-panel input[type=range] {
-
-                flex: 1;
-                min-width: 0;
-
-            }
-
-            #camera-panel output {
-
-                width: 42px;
-                text-align: right;
-                color: #e4bd78;
-
-            }
-
-            #camera-panel button {
-
-                padding: 9px;
-
-                border: 0;
-                border-radius: 5px;
-
-                cursor: pointer;
-
-                background: #a77b42;
-                color: white;
-
-                font-weight: bold;
-                margin: 3px;
-
-            }
-
-            #camera-panel button:hover {
-
-                background: #c99a5b;
-
-            }
-
-            #camera-panel .buttons {
-
-                display: flex;
-                flex-wrap: wrap;
-
-            }
-
-            #camera-panel .hint {
-
-                color: #aaa;
-                line-height: 1.6;
-
-            }
-
-        </style>
-
-        <h3>🎥 CALIBRACIÓN DE CÁMARA</h3>
-
-        <div class="group">
-
-            <strong>POSICIÓN</strong>
-
-            <div id="position-controls"></div>
-
-        </div>
-
-        <div class="group">
-
-            <strong>ROTACIÓN (GRADOS)</strong>
-
-            <div id="rotation-controls"></div>
-
-        </div>
-
-        <div class="group">
-
-            <strong>VISIÓN</strong>
-
-            <div id="fov-controls"></div>
-
-        </div>
-
-        <div class="buttons">
-
-            <button id="reset-camera">
-                REINICIAR
-            </button>
-
-            <button id="save-camera">
-                GUARDAR COORDENADAS
-            </button>
-
-        </div>
-
-        <p class="hint">
-
-            También puedes mover la cámara con:
-
-            <br>W / S: adelante y atrás
-
-            <br>A / D: izquierda y derecha
-
-            <br>Q / E: subir y bajar
-
-            <br>Flechas: inclinar la cámara
-
-            <br>R / F: rotar cámara
-
-        </p>
-
-    `;
-
-    document.body.appendChild(panel);
-
-    // Crear sliders
-
-    controls.forEach(control => {
-
-        const container = document.getElementById(
-            control.group + '-controls'
-        );
-
-        const row = document.createElement('div');
-
-        row.className = 'control';
-
-        row.innerHTML = `
-
-            <label>${control.name}</label>
-
-            <input
-                type="range"
-                min="${control.min}"
-                max="${control.max}"
-                step="${control.step}"
-                value="${cameraSettings[control.key]}"
-            >
-
-            <output>
-                ${cameraSettings[control.key]}
-            </output>
-
-        `;
-
-        const input = row.querySelector('input');
-
-        const output = row.querySelector('output');
-
-        input.addEventListener('input', () => {
-
-            cameraSettings[control.key] = Number(
-                input.value
-            );
-
-            output.textContent = input.value;
-
-            updateCamera();
-
-        });
-
-        container.appendChild(row);
-
-    });
-
-    // ======================================
-    // REINICIAR CÁMARA
-    // ======================================
-
-    document.getElementById('reset-camera').onclick = () => {
-
-        Object.assign(cameraSettings, {
-
-            x: INITIAL_POSITION.x,
-            y: INITIAL_POSITION.y,
-            z: INITIAL_POSITION.z,
-
-            rx: INITIAL_ROTATION.x,
-            ry: INITIAL_ROTATION.y,
-            rz: INITIAL_ROTATION.z,
-
-            fov: 50
-
-        });
-
-        panel.querySelectorAll(
-            'input[type=range]'
-        ).forEach(input => {
-
-            const label = input
-                .closest('.control')
-                .querySelector('label')
-                .textContent;
-
-            const control = controls.find(
-                c => c.name === label
-            );
-
-            if (control) {
-
-                input.value = cameraSettings[control.key];
-
-                input.nextElementSibling.textContent =
-                    cameraSettings[control.key];
-
-            }
-
-        });
-
-        updateCamera();
-
-    };
-
-    // ======================================
-    // GUARDAR COORDENADAS
-    // ======================================
-
-    document.getElementById('save-camera').onclick = () => {
-
-        console.log(
-            '========== CÁMARA DEFINITIVA =========='
-        );
-
-        console.log('Posición:', {
-
-            x: cameraSettings.x,
-            y: cameraSettings.y,
-            z: cameraSettings.z
-
-        });
-
-        console.log('Rotación:', {
-
-            x: cameraSettings.rx,
-            y: cameraSettings.ry,
-            z: cameraSettings.rz
-
-        });
-
-        console.log('FOV:', cameraSettings.fov);
-
-        console.log('Código para utilizar:');
-
-        console.log(`
-
-camera.position.set(
-    ${cameraSettings.x},
-    ${cameraSettings.y},
-    ${cameraSettings.z}
-);
-
-camera.rotation.set(
-    THREE.MathUtils.degToRad(${cameraSettings.rx}),
-    THREE.MathUtils.degToRad(${cameraSettings.ry}),
-    THREE.MathUtils.degToRad(${cameraSettings.rz}),
-    'XYZ'
-);
-
-camera.fov = ${cameraSettings.fov};
-
-camera.updateProjectionMatrix();
-
-        `);
-
-        alert(
-            '¡Coordenadas guardadas! Revisa la consola F12.'
-        );
-
-    };
-
-}
-
-// ==========================================
-// ACTUALIZAR SLIDERS
-// ==========================================
-
-function updateSliders() {
-
-    const panel = document.getElementById(
-        'camera-panel'
+    if (keys['s'] || keys['arrowdown']) {
+        moveZ += 1;
+    }
+
+    // Movimiento lateral
+    if (keys['a'] || keys['arrowleft']) {
+        moveX -= 1;
+    }
+
+    if (keys['d'] || keys['arrowright']) {
+        moveX += 1;
+    }
+
+    // Normalizar movimiento diagonal
+    const length = Math.sqrt(
+        moveX * moveX + moveZ * moveZ
     );
 
-    if (!panel) return;
+    if (length > 0) {
 
-    panel.querySelectorAll('.control').forEach(row => {
+        moveX /= length;
+        moveZ /= length;
 
-        const label = row.querySelector('label').textContent;
+    }
 
-        const control = controls.find(
-            c => c.name === label
-        );
+    // Aplicar movimiento
+    player.position.x += moveX * PLAYER_SPEED;
 
-        if (!control) return;
+    player.position.z += moveZ * PLAYER_SPEED;
 
-        const input = row.querySelector('input');
+    // Limitar movimiento en X
+    player.position.x = THREE.MathUtils.clamp(
+        player.position.x,
+        PLAYER_LIMITS.minX,
+        PLAYER_LIMITS.maxX
+    );
 
-        const output = row.querySelector('output');
-
-        input.value = cameraSettings[control.key];
-
-        output.textContent = cameraSettings[control.key];
-
-    });
+    // Limitar movimiento en Z
+    player.position.z = THREE.MathUtils.clamp(
+        player.position.z,
+        PLAYER_LIMITS.minZ,
+        PLAYER_LIMITS.maxZ
+    );
 
 }
 
 // ==========================================
-// TECLADO PARA CALIBRAR
+// CONTROLES DE TECLADO
 // ==========================================
 
 document.addEventListener('keydown', (event) => {
 
-    if (event.target instanceof HTMLInputElement) return;
+    const key = event.key.toLowerCase();
 
-    if (event.target instanceof HTMLTextAreaElement) return;
+    if (
+        ['w', 'a', 's', 'd',
+         'arrowup', 'arrowdown',
+         'arrowleft', 'arrowright'].includes(key)
+    ) {
 
-    const step = event.shiftKey ? 1 : 0.2;
+        event.preventDefault();
 
-    const angle = event.shiftKey ? 5 : 1;
-
-    switch (event.key.toLowerCase()) {
-
-        case 'w':
-            cameraSettings.z -= step;
-            break;
-
-        case 's':
-            cameraSettings.z += step;
-            break;
-
-        case 'a':
-            cameraSettings.x -= step;
-            break;
-
-        case 'd':
-            cameraSettings.x += step;
-            break;
-
-        case 'q':
-            cameraSettings.y += step;
-            break;
-
-        case 'e':
-            cameraSettings.y -= step;
-            break;
-
-        case 'arrowup':
-            cameraSettings.rx -= angle;
-            break;
-
-        case 'arrowdown':
-            cameraSettings.rx += angle;
-            break;
-
-        case 'arrowleft':
-            cameraSettings.ry -= angle;
-            break;
-
-        case 'arrowright':
-            cameraSettings.ry += angle;
-            break;
-
-        case 'r':
-            cameraSettings.rz += angle;
-            break;
-
-        case 'f':
-            cameraSettings.rz -= angle;
-            break;
-
-        default:
-            return;
+        keys[key] = true;
 
     }
 
-    event.preventDefault();
+});
 
-    updateCamera();
+document.addEventListener('keyup', (event) => {
 
-    updateSliders();
+    const key = event.key.toLowerCase();
+
+    keys[key] = false;
+
+});
+
+// Evitar que el jugador siga caminando
+// si la ventana pierde el foco.
+
+window.addEventListener('blur', () => {
+
+    Object.keys(keys).forEach(key => {
+
+        keys[key] = false;
+
+    });
 
 });
 
@@ -691,20 +300,16 @@ loader.load(
 
     (gltf) => {
 
-        // Agregar museo a la escena
-
+        // Agregar museo
         scene.add(gltf.scene);
 
-        // Crear personaje provisional
-
+        // Crear jugador
         createPlayer();
 
-        // Actualizar cámara
-
+        // Posicionar cámara
         updateCamera();
 
-        // Ocultar pantalla de carga si existe
-
+        // Ocultar pantalla de carga
         const loading = document.getElementById('loading');
 
         if (loading) {
@@ -713,12 +318,7 @@ loader.load(
 
         }
 
-        // Crear panel de calibración
-
-        createCalibrationPanel();
-
-        // Iniciar renderizado
-
+        // Iniciar animación
         animate();
 
     },
@@ -727,9 +327,8 @@ loader.load(
 
         if (xhr.total > 0) {
 
-            const progress = (
-                xhr.loaded / xhr.total
-            ) * 100;
+            const progress =
+                (xhr.loaded / xhr.total) * 100;
 
             console.log(
                 `Cargando museo: ${progress.toFixed(1)}%`
@@ -751,13 +350,20 @@ loader.load(
 );
 
 // ==========================================
-// RENDERIZADO
+// ANIMACIÓN
 // ==========================================
 
 function animate() {
 
     requestAnimationFrame(animate);
 
+    // Actualizar movimiento
+    updatePlayer();
+
+    // Seguir al jugador
+    updateCamera();
+
+    // Renderizar escena
     renderer.render(scene, camera);
 
 }
