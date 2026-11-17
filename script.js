@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -14,22 +15,23 @@ const PLAYER_START = {
     z: 1
 };
 
-// Límites de movimiento del jugador
+// Límites del jugador
 const PLAYER_LIMITS = {
     minX: -7.5,
     maxX: 7.5,
 
-    minZ: -6,
-    maxZ: 6
+    minZ: -5,
+    maxZ: 5
 };
 
-// Configuración definitiva de cámara
+// Posición de cámara respecto al jugador
 const CAMERA_OFFSET = {
     x: 0.1,
     y: 1.4,
     z: 6
 };
 
+// Rotación fija de cámara
 const CAMERA_ROTATION = {
     x: -10,
     y: 0,
@@ -50,7 +52,22 @@ let camera;
 let renderer;
 let player;
 
+let gameStarted = false;
+let museumLoaded = false;
+
 const keys = {};
+
+// ==========================================
+// ELEMENTOS HTML
+// ==========================================
+
+const loadingScreen = document.getElementById('loading');
+const loadingText = document.getElementById('loading-text');
+
+const startScreen = document.getElementById('start-screen');
+const startButton = document.getElementById('start-button');
+
+const errorMessage = document.getElementById('error-message');
 
 // ==========================================
 // ESCENA
@@ -160,7 +177,8 @@ function updateCamera() {
 
     if (!player) return;
 
-    // La cámara sigue al jugador
+    // Seguir al jugador
+
     camera.position.set(
         player.position.x + CAMERA_OFFSET.x,
         player.position.y + CAMERA_OFFSET.y,
@@ -168,6 +186,7 @@ function updateCamera() {
     );
 
     // Mantener rotación fija
+
     camera.rotation.order = 'XYZ';
 
     camera.rotation.set(
@@ -189,12 +208,13 @@ function updateCamera() {
 
 function updatePlayer() {
 
-    if (!player) return;
+    if (!player || !gameStarted) return;
 
     let moveX = 0;
     let moveZ = 0;
 
-    // Movimiento horizontal
+    // Avanzar y retroceder
+
     if (keys['w'] || keys['arrowup']) {
         moveZ -= 1;
     }
@@ -204,6 +224,7 @@ function updatePlayer() {
     }
 
     // Movimiento lateral
+
     if (keys['a'] || keys['arrowleft']) {
         moveX -= 1;
     }
@@ -213,6 +234,7 @@ function updatePlayer() {
     }
 
     // Normalizar movimiento diagonal
+
     const length = Math.sqrt(
         moveX * moveX + moveZ * moveZ
     );
@@ -225,18 +247,21 @@ function updatePlayer() {
     }
 
     // Aplicar movimiento
+
     player.position.x += moveX * PLAYER_SPEED;
 
     player.position.z += moveZ * PLAYER_SPEED;
 
-    // Limitar movimiento en X
+    // Limitar eje X
+
     player.position.x = THREE.MathUtils.clamp(
         player.position.x,
         PLAYER_LIMITS.minX,
         PLAYER_LIMITS.maxX
     );
 
-    // Limitar movimiento en Z
+    // Limitar eje Z
+
     player.position.z = THREE.MathUtils.clamp(
         player.position.z,
         PLAYER_LIMITS.minZ,
@@ -246,18 +271,54 @@ function updatePlayer() {
 }
 
 // ==========================================
+// INICIAR EXPERIENCIA
+// ==========================================
+
+startButton.addEventListener('click', () => {
+
+    if (!museumLoaded) return;
+
+    gameStarted = true;
+
+    // Ocultar pantalla inicial
+
+    startScreen.style.display = 'none';
+
+    // Limpiar teclas
+
+    Object.keys(keys).forEach(key => {
+        keys[key] = false;
+    });
+
+});
+
+// ==========================================
 // CONTROLES DE TECLADO
 // ==========================================
 
+const movementKeys = [
+    'w',
+    'a',
+    's',
+    'd',
+    'arrowup',
+    'arrowdown',
+    'arrowleft',
+    'arrowright'
+];
+
 document.addEventListener('keydown', (event) => {
+
+    if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+    ) {
+        return;
+    }
 
     const key = event.key.toLowerCase();
 
-    if (
-        ['w', 'a', 's', 'd',
-         'arrowup', 'arrowdown',
-         'arrowleft', 'arrowright'].includes(key)
-    ) {
+    if (movementKeys.includes(key)) {
 
         event.preventDefault();
 
@@ -275,15 +336,12 @@ document.addEventListener('keyup', (event) => {
 
 });
 
-// Evitar que el jugador siga caminando
-// si la ventana pierde el foco.
+// Evitar movimiento al cambiar de ventana
 
 window.addEventListener('blur', () => {
 
     Object.keys(keys).forEach(key => {
-
         keys[key] = false;
-
     });
 
 });
@@ -301,25 +359,36 @@ loader.load(
     (gltf) => {
 
         // Agregar museo
+
         scene.add(gltf.scene);
 
         // Crear jugador
+
         createPlayer();
 
         // Posicionar cámara
+
         updateCamera();
 
+        // Marcar museo como cargado
+
+        museumLoaded = true;
+
         // Ocultar pantalla de carga
-        const loading = document.getElementById('loading');
 
-        if (loading) {
+        loadingScreen.classList.add('hidden');
 
-            loading.classList.add('hidden');
+        // Habilitar botón de entrada
 
-        }
+        startButton.disabled = false;
 
-        // Iniciar animación
+        startButton.textContent = 'ENTRAR AL MUSEO';
+
+        // Iniciar renderizado
+
         animate();
+
+        console.log('Museo cargado correctamente.');
 
     },
 
@@ -330,9 +399,12 @@ loader.load(
             const progress =
                 (xhr.loaded / xhr.total) * 100;
 
-            console.log(
-                `Cargando museo: ${progress.toFixed(1)}%`
-            );
+            if (loadingText) {
+
+                loadingText.textContent =
+                    `Cargando museo: ${progress.toFixed(1)}%`;
+
+            }
 
         }
 
@@ -344,6 +416,13 @@ loader.load(
             'Error al cargar el museo:',
             error
         );
+
+        loadingScreen.classList.add('hidden');
+
+        errorMessage.textContent =
+            'No se pudo cargar el museo. Comprueba la ruta del archivo museo.glb.';
+
+        errorMessage.style.display = 'block';
 
     }
 
@@ -358,12 +437,15 @@ function animate() {
     requestAnimationFrame(animate);
 
     // Actualizar movimiento
+
     updatePlayer();
 
-    // Seguir al jugador
+    // Actualizar seguimiento de cámara
+
     updateCamera();
 
-    // Renderizar escena
+    // Renderizar
+
     renderer.render(scene, camera);
 
 }
