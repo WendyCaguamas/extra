@@ -1,12 +1,16 @@
+
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Museo 3D</title>
 
     <link rel="stylesheet" href="styles.css">
+
     <script type="importmap">
     {
         "imports": {
@@ -15,45 +19,101 @@
         }
     }
     </script>
+
 </head>
+
 <body>
-    <!-- Aquí conserva toda tu interfaz anterior -->
-    <script type="module" src="script.js"></script>
-</body>
-</html>
-<body>
+
+    <!-- ==================================
+         PANTALLA DE CARGA
+    =================================== -->
 
     <div id="loading">
+
         <h2>Cargando museo...</h2>
-        <p id="loading-text">Preparando mundo 3D</p>
+
+        <p id="loading-text">
+            Preparando mundo 3D
+        </p>
+
     </div>
 
+
+    <!-- ==================================
+         INTERFAZ PRINCIPAL
+    =================================== -->
+
     <div id="interface">
+
+        <!-- Información superior -->
+
         <div class="top-info">
+
             <h2>EXPLORACIÓN DEL MUSEO</h2>
+
             <span>Experiencia 3D</span>
+
         </div>
+
+
+        <!-- Punto central -->
 
         <div class="crosshair">+</div>
 
+
+        <!-- Controles -->
+
         <div class="controls">
+
             <p><strong>CONTROLES</strong></p>
-            <p>W A S D - Moverse</p>
-            <p>↑ ↓ ← → - Moverse</p>
-            <p>Mouse - Mirar alrededor</p>
-            <p>ESC - Liberar cursor</p>
+
+            <p>W / ↑ - Avanzar</p>
+
+            <p>S / ↓ - Retroceder</p>
+
+            <p>A / ← - Izquierda</p>
+
+            <p>D / → - Derecha</p>
+
         </div>
 
+
+        <!-- Pantalla de inicio -->
+
         <div id="start-screen">
+
             <h1>MUSEO 3D</h1>
-            <p>Explora el museo libremente.</p>
-            <button id="start-button">ENTRAR AL MUSEO</button>
-            <p class="small">WASD o flechas para caminar</p>
+
+            <p>
+                Explora el museo libremente.
+            </p>
+
+            <button id="start-button" disabled>
+                CARGANDO MUSEO...
+            </button>
+
+            <p class="small">
+                WASD o flechas para caminar
+            </p>
+
         </div>
+
     </div>
+
+
+    <!-- ==================================
+         MENSAJES DE ERROR
+    =================================== -->
 
     <div id="error-message"></div>
 
+
+    <!-- ==================================
+         SCRIPT PRINCIPAL
+    =================================== -->
+
     <script type="module" src="script.js"></script>
+
 </body>
+
 </html>
