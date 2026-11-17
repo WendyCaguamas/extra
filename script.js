@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const MODEL_PATH = './modelos/museo.glb';
 const MOVE_SPEED = 4;
 
-const CAMERA_POSITION = new THREE.Vector3(1, 10, 2.5);
+const CAMERA_POSITION = new THREE.Vector3(0, 0, 0);
 
 const CAMERA_ROTATION = new THREE.Euler(
     THREE.MathUtils.degToRad(80),
