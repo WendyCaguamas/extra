@@ -9,8 +9,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const MODEL_PATH = './modelos/museo.glb';
 const MOVE_SPEED = 4;
 
-// Cámara
 const CAMERA_POSITION = new THREE.Vector3(0, 10, 2.5);
+
 const CAMERA_ROTATION = new THREE.Euler(
     THREE.MathUtils.degToRad(80),
     0,
@@ -22,13 +22,14 @@ const CAMERA_ROTATION = new THREE.Euler(
 // ==========================================
 
 let scene, camera, renderer;
-let player;
+let player = null;
+
 let gameStarted = false;
 let lastTime = 0;
 
 const keys = {};
 
-const cameraOffset = CAMERA_POSITION.clone();
+const cameraOffset = new THREE.Vector3();
 
 const forward = new THREE.Vector3();
 const right = new THREE.Vector3();
@@ -91,25 +92,63 @@ loader.load(MODEL_PATH, (gltf) => {
     const museum = gltf.scene;
     scene.add(museum);
 
-    // Buscar al personaje.
-    player = null;
+    // Mostrar todos los objetos del modelo.
+    console.log('========== OBJETOS DEL MUSEO ==========');
 
     museum.traverse((object) => {
-        if (object.name.toLowerCase() === 'player') {
-            player = object;
-        }
+
+        console.log(
+            'Nombre:', object.name,
+            '| Tipo:', object.type,
+            '| UUID:', object.uuid
+        );
+
     });
 
-    // Posición inicial de la cámara respecto al jugador.
-    cameraOffset.copy(CAMERA_POSITION).sub(
-        player.getWorldPosition(new THREE.Vector3())
+    console.log('=======================================');
+
+    // Buscar al jugador sin distinguir mayúsculas.
+    const candidates = [];
+
+    museum.traverse((object) => {
+
+        if (
+            object.name.trim().toLowerCase() === 'player'
+        ) {
+            candidates.push(object);
+        }
+
+    });
+
+    // Comprobar si existe.
+    if (candidates.length === 0) {
+
+        console.error('No se encontró el objeto player.');
+
+        document.getElementById('loading-text').textContent =
+            'No se encontró el personaje player. Revisa F12.';
+
+        return;
+    }
+
+    player = candidates[0];
+
+    console.log('Personaje encontrado:', player);
+
+    // Obtener posición inicial global.
+    const playerPosition = player.getWorldPosition(
+        new THREE.Vector3()
     );
 
-    // Iniciar juego.
+    // Configurar cámara relativa al personaje.
+    cameraOffset.copy(CAMERA_POSITION);
+
+    camera.position.copy(playerPosition).add(cameraOffset);
+
+    // Ocultar pantalla de carga.
     document.getElementById('loading').classList.add('hidden');
 
-    console.log('Museo cargado.');
-    console.log('Personaje:', player);
+    console.log('Museo cargado correctamente.');
 
     animate();
 
@@ -150,34 +189,57 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('keyup', (event) => {
+
     keys[event.key.toLowerCase()] = false;
+
 });
 
 window.addEventListener('blur', () => {
-    Object.keys(keys).forEach(key => keys[key] = false);
+
+    Object.keys(keys).forEach(key => {
+        keys[key] = false;
+    });
+
 });
 
 // ==========================================
-// MOVIMIENTO
+// MOVIMIENTO DEL JUGADOR
 // ==========================================
 
 function movePlayer(delta) {
 
     if (!gameStarted || !player) return;
 
-    // Dirección frontal según la cámara fija.
+    // Dirección frontal de la cámara.
     camera.getWorldDirection(forward);
+
     forward.y = 0;
     forward.normalize();
 
+    // Dirección lateral.
     right.crossVectors(forward, up).normalize();
 
     movement.set(0, 0, 0);
 
-    if (keys['w'] || keys['arrowup']) movement.add(forward);
-    if (keys['s'] || keys['arrowdown']) movement.sub(forward);
-    if (keys['a'] || keys['arrowleft']) movement.sub(right);
-    if (keys['d'] || keys['arrowright']) movement.add(right);
+    // Adelante
+    if (keys['w'] || keys['arrowup']) {
+        movement.add(forward);
+    }
+
+    // Atrás
+    if (keys['s'] || keys['arrowdown']) {
+        movement.sub(forward);
+    }
+
+    // Izquierda
+    if (keys['a'] || keys['arrowleft']) {
+        movement.sub(right);
+    }
+
+    // Derecha
+    if (keys['d'] || keys['arrowright']) {
+        movement.add(right);
+    }
 
     if (movement.lengthSq() > 0) {
 
@@ -198,13 +260,15 @@ function movePlayer(delta) {
 
 function updateCamera() {
 
+    if (!player) return;
+
     const playerPosition = player.getWorldPosition(
         new THREE.Vector3()
     );
 
     camera.position.copy(playerPosition).add(cameraOffset);
 
-    // La cámara mantiene siempre su orientación.
+    // Mantener rotación fija.
     camera.rotation.copy(CAMERA_ROTATION);
 
 }
@@ -217,7 +281,11 @@ function animate(time = 0) {
 
     requestAnimationFrame(animate);
 
-    const delta = Math.min((time - lastTime) / 1000, 0.05);
+    const delta = Math.min(
+        (time - lastTime) / 1000,
+        0.05
+    );
+
     lastTime = time;
 
     if (player && camera) {
@@ -238,8 +306,12 @@ function animate(time = 0) {
 window.addEventListener('resize', () => {
 
     camera.aspect = window.innerWidth / window.innerHeight;
+
     camera.updateProjectionMatrix();
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
 
 });
