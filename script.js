@@ -1,6 +1,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { applyPlayerTexture } from './player.js';
 
 // ==========================================
 // CONFIGURACIÓN
@@ -150,7 +151,7 @@ function createPlayer() {
     );
 
     const material = new THREE.MeshBasicMaterial({
-        color: 0x3498db,
+        color: 0xffffff,
         side: THREE.DoubleSide
     });
 
@@ -164,6 +165,9 @@ function createPlayer() {
     character.position.y = 0.9;
 
     player.add(character);
+
+    // Aplicar textura del personaje
+    applyPlayerTexture(player);
 
     scene.add(player);
 
