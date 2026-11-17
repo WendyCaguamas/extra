@@ -1,0 +1,144 @@
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: white;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#interface {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.top-info {
+    position: absolute;
+    top: 25px;
+    left: 30px;
+}
+
+.top-info h2 {
+    font-size: 18px;
+    letter-spacing: 3px;
+}
+
+.top-info span {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 25px;
+    color: white;
+    text-shadow: 0 0 5px black;
+}
+
+.controls {
+    position: absolute;
+    bottom: 25px;
+    left: 25px;
+    background: rgba(0, 0, 0, 0.65);
+    padding: 15px 20px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.8;
+}
+
+.controls strong {
+    color: #e5bd78;
+    letter-spacing: 2px;
+}
+
+#start-screen {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    pointer-events: auto;
+    text-align: center;
+}
+
+#start-screen h1 {
+    font-size: 55px;
+    letter-spacing: 8px;
+}
+
+#start-screen p {
+    color: #ccc;
+}
+
+#start-button {
+    padding: 16px 35px;
+    border: 1px solid #d9b477;
+    background: #b58b50;
+    color: white;
+    font-weight: bold;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+#start-button:hover {
+    background: #d2a968;
+    transform: scale(1.05);
+}
+
+.small {
+    font-size: 12px;
+}
+
+#loading {
+    position: fixed;
+    inset: 0;
+    background: #111;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    gap: 15px;
+}
+
+#loading p {
+    color: #aaa;
+    font-size: 13px;
+}
+
+#loading.hidden {
+    display: none;
+}
+
+#error-message {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 30;
+    background: #7b2525;
+    color: white;
+    padding: 15px;
+    border-radius: 6px;
+}
