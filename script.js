@@ -11,7 +11,7 @@ const MOVE_SPEED = 4;
 const CAMERA_POSITION = new THREE.Vector3(0, 0, 0);
 
 const CAMERA_ROTATION = new THREE.Euler(
-    THREE.MathUtils.degToRad(80),
+    THREE.MathUtils.degToRad(0),
     0,
     0
 );
