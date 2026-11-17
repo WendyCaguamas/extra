@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -22,14 +21,14 @@ const CAMERA_ROTATION = new THREE.Euler(
 // ==========================================
 
 let scene, camera, renderer;
-let player = null;
+let player;
 
 let gameStarted = false;
 let lastTime = 0;
 
 const keys = {};
 
-const cameraOffset = new THREE.Vector3();
+const cameraOffset = CAMERA_POSITION.clone();
 
 const forward = new THREE.Vector3();
 const right = new THREE.Vector3();
@@ -48,7 +47,11 @@ renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, 2)
+);
+
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
@@ -77,9 +80,60 @@ scene.add(
     new THREE.AmbientLight(0xffffff, 1.5)
 );
 
-const light = new THREE.DirectionalLight(0xffffff, 2);
+const light = new THREE.DirectionalLight(
+    0xffffff,
+    2
+);
+
 light.position.set(5, 10, 5);
+
 scene.add(light);
+
+// ==========================================
+// CREAR PLAYER PROVISIONAL
+// ==========================================
+
+function createPlayer() {
+
+    // Grupo principal del jugador.
+    player = new THREE.Group();
+
+    player.name = 'player';
+
+    player.position.set(0, 0, 1);
+
+    // Plano provisional.
+    const geometry = new THREE.PlaneGeometry(1, 1.8);
+
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x3498db,
+        side: THREE.DoubleSide
+    });
+
+    const character = new THREE.Mesh(
+        geometry,
+        material
+    );
+
+    character.name = 'player-model';
+
+    // Mantener el plano vertical.
+    character.rotation.x = 0;
+
+    // Centrar el plano respecto al suelo.
+    character.position.y = 0.9;
+
+    player.add(character);
+
+    scene.add(player);
+
+    console.log('Player creado:', player);
+
+    // FUTURO:
+    // Conectar aquí player.js para controlar el modelo,
+    // animaciones, orientación y comportamiento del personaje.
+
+}
 
 // ==========================================
 // CARGAR MUSEO
@@ -90,65 +144,20 @@ const loader = new GLTFLoader();
 loader.load(MODEL_PATH, (gltf) => {
 
     const museum = gltf.scene;
+
     scene.add(museum);
 
-    // Mostrar todos los objetos del modelo.
-    console.log('========== OBJETOS DEL MUSEO ==========');
+    console.log('Museo cargado:', museum);
 
-    museum.traverse((object) => {
+    // Crear personaje después de cargar el museo.
+    createPlayer();
 
-        console.log(
-            'Nombre:', object.name,
-            '| Tipo:', object.type,
-            '| UUID:', object.uuid
-        );
-
-    });
-
-    console.log('=======================================');
-
-    // Buscar al jugador sin distinguir mayúsculas.
-    const candidates = [];
-
-    museum.traverse((object) => {
-
-        if (
-            object.name.trim().toLowerCase() === 'player'
-        ) {
-            candidates.push(object);
-        }
-
-    });
-
-    // Comprobar si existe.
-    if (candidates.length === 0) {
-
-        console.error('No se encontró el objeto player.');
-
-        document.getElementById('loading-text').textContent =
-            'No se encontró el personaje player. Revisa F12.';
-
-        return;
-    }
-
-    player = candidates[0];
-
-    console.log('Personaje encontrado:', player);
-
-    // Obtener posición inicial global.
-    const playerPosition = player.getWorldPosition(
-        new THREE.Vector3()
-    );
-
-    // Configurar cámara relativa al personaje.
+    // Posicionar la cámara respecto al jugador.
     cameraOffset.copy(CAMERA_POSITION);
 
-    camera.position.copy(playerPosition).add(cameraOffset);
+    camera.position.copy(player.position).add(cameraOffset);
 
-    // Ocultar pantalla de carga.
     document.getElementById('loading').classList.add('hidden');
-
-    console.log('Museo cargado correctamente.');
 
     animate();
 
@@ -181,7 +190,9 @@ document.addEventListener('keydown', (event) => {
         'arrowup', 'arrowdown',
         'arrowleft', 'arrowright'
     ].includes(key)) {
+
         event.preventDefault();
+
     }
 
     keys[key] = true;
@@ -210,33 +221,27 @@ function movePlayer(delta) {
 
     if (!gameStarted || !player) return;
 
-    // Dirección frontal de la cámara.
     camera.getWorldDirection(forward);
 
     forward.y = 0;
     forward.normalize();
 
-    // Dirección lateral.
     right.crossVectors(forward, up).normalize();
 
     movement.set(0, 0, 0);
 
-    // Adelante
     if (keys['w'] || keys['arrowup']) {
         movement.add(forward);
     }
 
-    // Atrás
     if (keys['s'] || keys['arrowdown']) {
         movement.sub(forward);
     }
 
-    // Izquierda
     if (keys['a'] || keys['arrowleft']) {
         movement.sub(right);
     }
 
-    // Derecha
     if (keys['d'] || keys['arrowright']) {
         movement.add(right);
     }
@@ -262,13 +267,8 @@ function updateCamera() {
 
     if (!player) return;
 
-    const playerPosition = player.getWorldPosition(
-        new THREE.Vector3()
-    );
+    camera.position.copy(player.position).add(cameraOffset);
 
-    camera.position.copy(playerPosition).add(cameraOffset);
-
-    // Mantener rotación fija.
     camera.rotation.copy(CAMERA_ROTATION);
 
 }
@@ -291,6 +291,7 @@ function animate(time = 0) {
     if (player && camera) {
 
         movePlayer(delta);
+
         updateCamera();
 
         renderer.render(scene, camera);
