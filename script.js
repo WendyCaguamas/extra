@@ -1,35 +1,41 @@
-import * as THREE from 'three';
 
+import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// ========================================
+// ==========================================
 // CONFIGURACIÓN
-// ========================================
+// ==========================================
 
 const MODEL_PATH = './modelos/museo.glb';
 
 const MOVE_SPEED = 4;
-const MOUSE_SENSITIVITY = 0.002;
 
-// ========================================
+// ==========================================
 // VARIABLES
-// ========================================
+// ==========================================
 
 let scene;
 let renderer;
 let camera;
+let player;
 
-let yaw = 0;
-let pitch = 0;
+let gameStarted = false;
+let lastTime = 0;
+
+// Posición inicial de la cámara respecto al jugador.
+const cameraOffset = new THREE.Vector3();
+
+// Vectores para movimiento.
+const forward = new THREE.Vector3();
+const right = new THREE.Vector3();
+const movement = new THREE.Vector3();
+const up = new THREE.Vector3(0, 1, 0);
 
 const keys = {};
 
-let pointerLocked = false;
-let lastTime = 0;
-
-// ========================================
+// ==========================================
 // ESCENA
-// ========================================
+// ==========================================
 
 scene = new THREE.Scene();
 scene.background = new THREE.Color(0x222222);
@@ -39,24 +45,23 @@ renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, 2)
+);
 
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-
 renderer.shadowMap.enabled = true;
 
 document.body.appendChild(renderer.domElement);
 
-// ========================================
+// ==========================================
 // ILUMINACIÓN
-// ========================================
+// ==========================================
 
-const ambientLight = new THREE.AmbientLight(
-    0xffffff,
-    1.5
+scene.add(
+    new THREE.AmbientLight(0xffffff, 1.5)
 );
-
-scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(
     0xffffff,
@@ -66,184 +71,205 @@ const directionalLight = new THREE.DirectionalLight(
 directionalLight.position.set(5, 10, 5);
 scene.add(directionalLight);
 
-// ========================================
-// CARGAR MODELO 3D
-// ========================================
+// ==========================================
+// CARGAR MUSEO
+// ==========================================
 
 const loader = new GLTFLoader();
 
 loader.load(
     MODEL_PATH,
 
-    function (gltf) {
+    (gltf) => {
 
         const museum = gltf.scene;
 
         scene.add(museum);
 
-        // Buscar la cámara original del modelo.
-        const modelCamera =
-            gltf.cameras?.[0] ||
-            museum.getObjectByProperty('isCamera', true);
+        museum.updateMatrixWorld(true);
 
-        if (modelCamera) {
+        // Buscar los objetos por nombre.
+        let originalCamera = null;
+        let originalPlayer = null;
 
-            // Obtener la posición y orientación globales.
-            museum.updateMatrixWorld(true);
+        museum.traverse((object) => {
 
-            const worldPosition = new THREE.Vector3();
-            const worldQuaternion = new THREE.Quaternion();
+            const name = object.name.toLowerCase();
 
-            modelCamera.getWorldPosition(worldPosition);
-            modelCamera.getWorldQuaternion(worldQuaternion);
+            if (name === 'camera') {
+                originalCamera = object;
+            }
 
-            // Separar la cámara del modelo para poder moverla.
-            scene.add(modelCamera);
+            if (name === 'player') {
+                originalPlayer = object;
+            }
 
-            modelCamera.position.copy(worldPosition);
-            modelCamera.quaternion.copy(worldQuaternion);
+        });
 
-            camera = modelCamera;
+        // ==================================
+        // VALIDAR OBJETOS
+        // ==================================
 
-            console.log('Cámara original del museo cargada.');
+        if (!originalCamera) {
 
-        } else {
+            showError('No se encontró el objeto llamado "camera" en el GLB.');
+            return;
 
-            // Cámara alternativa si el modelo no contiene ninguna.
-            camera = new THREE.PerspectiveCamera(
-                75,
-                window.innerWidth / window.innerHeight,
-                0.1,
-                1000
-            );
-
-            camera.position.set(0, 1.7, 5);
-
-            scene.add(camera);
-
-            console.warn(
-                'El modelo no tiene cámara. Se utilizó una cámara alternativa.'
-            );
         }
 
-        // Preparar los ángulos para controlar la cámara.
-        camera.rotation.order = 'YXZ';
+        if (!originalPlayer) {
 
-        yaw = camera.rotation.y;
-        pitch = camera.rotation.x;
+            showError('No se encontró el objeto llamado "player" en el GLB.');
+            return;
 
-        pitch = THREE.MathUtils.clamp(
-            pitch,
-            -Math.PI / 2 + 0.01,
-            Math.PI / 2 - 0.01
+        }
+
+        // ==================================
+        // EXTRAER TRANSFORMACIONES GLOBALES
+        // ==================================
+
+        function detachObject(object) {
+
+            const position = new THREE.Vector3();
+            const quaternion = new THREE.Quaternion();
+            const scale = new THREE.Vector3();
+
+            object.updateWorldMatrix(true, false);
+
+            object.getWorldPosition(position);
+            object.getWorldQuaternion(quaternion);
+            object.getWorldScale(scale);
+
+            // Separarlo de su padre.
+            if (object.parent) {
+                object.parent.remove(object);
+            }
+
+            // Añadirlo directamente a la escena.
+            scene.add(object);
+
+            object.position.copy(position);
+            object.quaternion.copy(quaternion);
+            object.scale.copy(scale);
+
+            return position;
+
+        }
+
+        // ==================================
+        // CONFIGURAR PLAYER
+        // ==================================
+
+        player = originalPlayer;
+
+        const initialPlayerPosition = detachObject(player);
+
+        // ==================================
+        // CONFIGURAR CAMERA
+        // ==================================
+
+        camera = originalCamera;
+
+        const initialCameraPosition = detachObject(camera);
+
+        // Conservar la orientación original de la cámara.
+        const fixedCameraQuaternion = camera.quaternion.clone();
+
+        // Calcular cuánto está desplazada la cámara
+        // respecto al personaje.
+        cameraOffset.subVectors(
+            initialCameraPosition,
+            initialPlayerPosition
         );
 
-        camera.rotation.set(pitch, yaw, 0, 'YXZ');
+        // La cámara no girará durante el juego.
+        camera.quaternion.copy(fixedCameraQuaternion);
+
+        // ==================================
+        // FINALIZAR CARGA
+        // ==================================
 
         document.getElementById('loading').classList.add('hidden');
 
         console.log('Museo cargado correctamente.');
+        console.log('Jugador:', player.name);
+        console.log('Cámara:', camera.name);
 
         animate();
 
     },
 
-    function (progress) {
+    (progress) => {
 
         if (progress.total > 0) {
+
             const percentage = Math.round(
                 (progress.loaded / progress.total) * 100
             );
 
             document.getElementById('loading-text').textContent =
                 `Cargando museo: ${percentage}%`;
+
         }
 
     },
 
-    function (error) {
+    (error) => {
 
-        console.error('Error cargando el museo:', error);
+        console.error(error);
 
-        document.getElementById('loading-text').textContent =
-            'No se pudo cargar el modelo.';
+        showError('No se pudo cargar el archivo museo.glb.');
 
-        const errorElement = document.getElementById('error-message');
-
-        errorElement.style.display = 'block';
-
-        errorElement.textContent =
-            'Error al cargar museo.gltf. Comprueba la ruta y el formato del archivo.';
     }
 );
 
-// ========================================
+// ==========================================
+// ERRORES
+// ==========================================
+
+function showError(message) {
+
+    document.getElementById('loading').classList.add('hidden');
+
+    const errorElement = document.getElementById('error-message');
+
+    errorElement.style.display = 'block';
+    errorElement.textContent = message;
+
+    console.error(message);
+
+}
+
+// ==========================================
 // INICIAR JUEGO
-// ========================================
+// ==========================================
 
-const startButton = document.getElementById('start-button');
-const startScreen = document.getElementById('start-screen');
+document.getElementById('start-button').addEventListener('click', () => {
 
-startButton.addEventListener('click', () => {
+    if (!camera || !player) return;
 
-    if (!camera) return;
+    gameStarted = true;
 
-    renderer.domElement.requestPointerLock();
-
-});
-
-// ========================================
-// CONTROL DEL MOUSE
-// ========================================
-
-document.addEventListener('pointerlockchange', () => {
-
-    pointerLocked =
-        document.pointerLockElement === renderer.domElement;
-
-    if (pointerLocked) {
-        startScreen.style.display = 'none';
-    } else {
-        startScreen.style.display = 'flex';
-    }
+    document.getElementById('start-screen').style.display = 'none';
 
 });
 
-document.addEventListener('mousemove', (event) => {
-
-    if (!pointerLocked || !camera) return;
-
-    yaw -= event.movementX * MOUSE_SENSITIVITY;
-    pitch -= event.movementY * MOUSE_SENSITIVITY;
-
-    pitch = THREE.MathUtils.clamp(
-        pitch,
-        -Math.PI / 2 + 0.01,
-        Math.PI / 2 - 0.01
-    );
-
-    camera.rotation.set(
-        pitch,
-        yaw,
-        0,
-        'YXZ'
-    );
-
-});
-
-// ========================================
-// TECLADO
-// ========================================
+// ==========================================
+// CONTROLES
+// ==========================================
 
 document.addEventListener('keydown', (event) => {
 
     const key = event.key.toLowerCase();
 
-    if (
-        ['w', 'a', 's', 'd', 'arrowup',
-         'arrowdown', 'arrowleft', 'arrowright'].includes(key)
-    ) {
+    if ([
+        'w', 'a', 's', 'd',
+        'arrowup', 'arrowdown',
+        'arrowleft', 'arrowright'
+    ].includes(key)) {
+
         event.preventDefault();
+
     }
 
     keys[key] = true;
@@ -256,7 +282,6 @@ document.addEventListener('keyup', (event) => {
 
 });
 
-// Evitar que las teclas queden presionadas al perder el foco.
 window.addEventListener('blur', () => {
 
     Object.keys(keys).forEach(key => {
@@ -265,27 +290,25 @@ window.addEventListener('blur', () => {
 
 });
 
-// ========================================
+// ==========================================
 // MOVIMIENTO DEL JUGADOR
-// ========================================
+// ==========================================
 
 function movePlayer(delta) {
 
-    if (!camera || !pointerLocked) return;
+    if (!gameStarted || !player || !camera) return;
 
-    const forward = new THREE.Vector3(
-        -Math.sin(yaw),
-        0,
-        -Math.cos(yaw)
-    );
+    // Obtener la dirección frontal de la cámara.
+    camera.getWorldDirection(forward);
 
-    const right = new THREE.Vector3(
-        Math.cos(yaw),
-        0,
-        -Math.sin(yaw)
-    );
+    // Eliminar el componente vertical.
+    forward.y = 0;
+    forward.normalize();
 
-    const movement = new THREE.Vector3();
+    // Obtener dirección derecha.
+    right.crossVectors(forward, up).normalize();
+
+    movement.set(0, 0, 0);
 
     // Adelante
     if (keys['w'] || keys['arrowup']) {
@@ -311,7 +334,7 @@ function movePlayer(delta) {
 
         movement.normalize();
 
-        camera.position.addScaledVector(
+        player.position.addScaledVector(
             movement,
             MOVE_SPEED * delta
         );
@@ -320,32 +343,50 @@ function movePlayer(delta) {
 
 }
 
-// ========================================
-// BUCLE PRINCIPAL
-// ========================================
+// ==========================================
+// SEGUIMIENTO DE CÁMARA
+// ==========================================
 
-function animate(currentTime = 0) {
+function updateCamera() {
+
+    if (!camera || !player) return;
+
+    // Seguir al personaje conservando
+    // exactamente el desplazamiento inicial.
+    camera.position.copy(player.position).add(cameraOffset);
+
+}
+
+// ==========================================
+// BUCLE PRINCIPAL
+// ==========================================
+
+function animate(time = 0) {
 
     requestAnimationFrame(animate);
 
     const delta = Math.min(
-        (currentTime - lastTime) / 1000,
+        (time - lastTime) / 1000,
         0.05
     );
 
-    lastTime = currentTime;
+    lastTime = time;
 
-    movePlayer(delta);
+    if (camera && player) {
 
-    if (camera) {
+        movePlayer(delta);
+
+        updateCamera();
+
         renderer.render(scene, camera);
+
     }
 
 }
 
-// ========================================
-// REDIMENSIONAR PANTALLA
-// ========================================
+// ==========================================
+// REDIMENSIONAR
+// ==========================================
 
 window.addEventListener('resize', () => {
 
